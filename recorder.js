@@ -255,6 +255,13 @@ function startRecording(username, streamUrl) {
       return;
     }
 
+    if (isLikelyTransientInputFailure(text)) {
+      if (isInput404Message(text)) {
+        console.log(yellow + `[ffmpeg] WARN: Input URL expired for ${username}: ${text}` + reset);
+      }
+      requestImmediateRestart(username, 'Input stream failed.');
+    }
+
     if (text.includes('frame=') || text.includes('time=') || text.includes('bitrate=')) {
       process.stdout.write('.');
       return;
@@ -555,6 +562,7 @@ function findStreamUrlInJson(node, visited = new Set()) {
   }
 
   let flvCandidate = null;
+  let m3u8Candidate = null;
 
   for (const key of Object.keys(node)) {
     const value = node[key];
@@ -565,11 +573,14 @@ function findStreamUrlInJson(node, visited = new Set()) {
           if (url.includes('only_audio=1')) {
             continue;
           }
-          if (url.toLowerCase().includes('.m3u8')) {
-            return url;
+          if (url.toLowerCase().includes('.flv')) {
+            if (!flvCandidate) {
+              flvCandidate = url;
+            }
+            continue;
           }
-          if (!flvCandidate) {
-            flvCandidate = url;
+          if (!m3u8Candidate) {
+            m3u8Candidate = url;
           }
         }
       }
@@ -579,7 +590,25 @@ function findStreamUrlInJson(node, visited = new Set()) {
     }
   }
 
-  return flvCandidate;
+  return flvCandidate || m3u8Candidate;
+}
+
+function isInput404Message(text) {
+  return /404 Not Found/i.test(text) || /Server returned 404 Not Found/i.test(text);
+}
+
+function isLikelyTransientInputFailure(text) {
+  return isInput404Message(text) || /Error opening input/i.test(text);
+}
+
+function requestImmediateRestart(username, reason) {
+  const state = getRecordingState(username);
+  if (!state || state.pendingRestart) {
+    return;
+  }
+
+  console.log(yellow + `🔁 ${reason} Restarting ${username} with a fresh stream URL...` + reset);
+  stopRecording({ restart: true, username });
 }
 
 async function monitorLoop() {
