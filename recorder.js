@@ -1,5 +1,5 @@
 ﻿const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
@@ -32,7 +32,46 @@ const recordDurationSeconds = rawRecordDuration != null && rawRecordDuration !==
 const recordDurationLabel = recordDurationSeconds == null ? 'unlimited' : formatDuration(recordDurationSeconds);
 console.log(cyan + 'ℹ️ Record duration:', recordDurationLabel + reset);
 
-const ffmpegPath = process.env.FFMPEG_PATH || ffmpegInstaller.path;
+function canRunFfmpeg(candidatePath) {
+  if (!candidatePath) {
+    return false;
+  }
+
+  try {
+    const result = spawnSync(candidatePath, ['-version'], {
+      encoding: 'utf8',
+      timeout: 5000,
+      windowsHide: true
+    });
+
+    return !result.error && result.status === 0;
+  } catch (err) {
+    return false;
+  }
+}
+
+function resolveFfmpegPath() {
+  const explicitPath = process.env.FFMPEG_PATH;
+  if (explicitPath) {
+    return explicitPath;
+  }
+
+  if (process.platform === 'linux' && canRunFfmpeg('ffmpeg')) {
+    return 'ffmpeg';
+  }
+
+  if (ffmpegInstaller.path) {
+    return ffmpegInstaller.path;
+  }
+
+  if (canRunFfmpeg('ffmpeg')) {
+    return 'ffmpeg';
+  }
+
+  return null;
+}
+
+const ffmpegPath = resolveFfmpegPath();
 if (!ffmpegPath) {
   console.error('FFmpeg binary not found. Install FFmpeg, set FFMPEG_PATH, or install @ffmpeg-installer/ffmpeg.');
   process.exit(1);
@@ -45,6 +84,32 @@ if (!fs.existsSync('recordings')) {
 
 console.log(cyan + '📄 Working directory: ' + process.cwd() + reset);
 console.log(cyan + '📁 Recordings folder: ' + path.resolve('recordings') + reset);
+console.log(cyan + '🎞️ Using FFmpeg binary: ' + ffmpegPath + reset);
+
+const ffmpegProbe = spawnSync(ffmpegPath, ['-version'], {
+  encoding: 'utf8',
+  timeout: 5000,
+  windowsHide: true
+});
+
+if (ffmpegProbe.error || ffmpegProbe.status !== 0) {
+  console.error(red + '❌ FFmpeg startup probe failed.' + reset);
+  if (ffmpegProbe.error) {
+    console.error(red + '❌ Probe error: ' + ffmpegProbe.error.message + reset);
+  }
+  if (ffmpegProbe.stderr) {
+    console.error(red + '❌ Probe stderr: ' + ffmpegProbe.stderr.trim() + reset);
+  }
+  process.exit(1);
+}
+
+const ffmpegVersionLine = (ffmpegProbe.stdout || '')
+  .split(/\r?\n/)
+  .map((line) => line.trim())
+  .find(Boolean);
+if (ffmpegVersionLine) {
+  console.log(cyan + '🎞️ FFmpeg probe: ' + ffmpegVersionLine + reset);
+}
 
 const activeRecordings = new Map();
 const restartTimers = new Map();
