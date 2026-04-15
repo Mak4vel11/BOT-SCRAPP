@@ -15,8 +15,8 @@ const reset = '\x1b[0m';
 
 // 25 account placeholders - Add your TikTok usernames here
 const accountsList = [
-  'kozak696990', 'cashmoneyotr', '', '', '',
-  '', '', '', '', '',
+  'kozak696990', 'cashmoneyotr', 'mosiadoda', 'viktorivanyuta', 'viktorrabey',
+  'etawanesiaofficial', 'qqpp__22', '', '', '',
   '', '', '', '', '',
   '', '', '', '', '',
   '', '', '', '', ''
@@ -40,17 +40,44 @@ if (!ffmpegPath) {
 
 if (!fs.existsSync('recordings')) {
   fs.mkdirSync('recordings', { recursive: true });
+  console.log(cyan + '✅ Created recordings directory' + reset);
 }
 
-let ffmpegProcess = null;
-let recordingUser = null;
+console.log(cyan + '📄 Working directory: ' + process.cwd() + reset);
+console.log(cyan + '📁 Recordings folder: ' + path.resolve('recordings') + reset);
+
+const activeRecordings = new Map();
+const restartTimers = new Map();
+let shutdownRequested = false;
+let shutdownExitCode = 0;
+
+function getRecordingState(username) {
+  return activeRecordings.get(username) || null;
+}
+
+function isRecording(username) {
+  return activeRecordings.has(username);
+}
+
+function getOutputConfig(streamUrl, username) {
+  const safeUsername = username.replace(/[^\w.-]+/g, '_');
+  const timestamp = Date.now();
+  const isFlvStream = /\.flv(?:\?|$)/i.test(streamUrl);
+
+  return {
+    outputFile: path.join('recordings', `live_${safeUsername}_${timestamp}.mkv`),
+    outputFormat: 'matroska',
+    useBitstreamFilter: isFlvStream
+  };
+}
 
 function startRecording(username, streamUrl) {
-  if (ffmpegProcess) {
+  if (isRecording(username)) {
     return;
   }
 
-  const outputFile = path.join('recordings', `live_${username}_${Date.now()}.mp4`);
+  const outputConfig = getOutputConfig(streamUrl, username);
+  const outputFile = outputConfig.outputFile;
   console.log(green + '🎥 Starting recording for', username, '->', outputFile + reset);
   console.log(green + '⏱️ Record duration:', recordDurationLabel + reset);
   console.log(blue + '🔗 Stream URL:', streamUrl + reset);
@@ -59,82 +86,236 @@ function startRecording(username, streamUrl) {
     '-y',
     '-hide_banner',
     '-loglevel', 'warning',
-    // Connection & buffering settings
+    '-fflags', '+discardcorrupt',
+    '-reconnect', '1',
     '-reconnect_streamed', '1',
     '-reconnect_delay_max', '5',
+    '-rw_timeout', '15000000',
     '-rtbufsize', '100M',
-    '-fflags', '+discardcorrupt+genpts+igndts',
-    '-flags', '+low_delay',
-    '-flags2', '+fast',
-    '-start_at_zero',
-    '-avoid_negative_ts', 'make_zero',
     '-i', streamUrl,
-    '-map', '0:v:0?',
-    '-map', '0:a:0?',
-    '-c:v', 'libx264',
-    '-preset', 'ultrafast',
-    '-tune', 'zerolatency',
-    '-crf', '24',
-    '-c:a', 'aac',
-    '-b:a', '128k',
-    '-af', 'aresample=async=1',
-    '-vsync', '1',
-    // Output format
-    '-f', 'mp4',
-    '-movflags', 'faststart+frag_keyframe+empty_moov+delay_moov',
-    '-max_muxing_queue_size', '9999'
+    '-c', 'copy'
   ];
+
+  if (outputConfig.useBitstreamFilter) {
+    ffmpegArgs.push('-bsf:v', 'h264_mp4toannexb');
+  }
+
+  ffmpegArgs.push('-f', outputConfig.outputFormat);
 
   if (recordDurationSeconds != null) {
     ffmpegArgs.push('-t', String(recordDurationSeconds));
   }
 
   ffmpegArgs.push(outputFile);
-  ffmpegProcess = spawn(ffmpegPath, ffmpegArgs);
+  const resolvedOutputFile = path.resolve(outputFile);
+  console.log(cyan + '🔧 FFmpeg command: ' + ffmpegPath + ' ' + ffmpegArgs.map(arg => `"${arg}"`).join(' ') + reset);
+  console.log(cyan + '🏃 Spawning FFmpeg process...' + reset);
+  const ffmpegProcess = spawn(ffmpegPath, ffmpegArgs);
+  console.log(cyan + `✅ FFmpeg process spawned for ${username} (PID: ${ffmpegProcess.pid})` + reset);
+
+  const state = {
+    ffmpegProcess,
+    streamUrl,
+    intentionalStop: false,
+    pendingRestart: false,
+    errorState: {
+      consecutiveHlsFailures: 0,
+      firstFailureAt: null
+    }
+  };
+  activeRecordings.set(username, state);
 
   ffmpegProcess.on('exit', (code, signal) => {
-    if (code === 0) {
-      console.log(green + `✅ Recording completed successfully for ${username}` + reset);
-    } else {
-      console.log(yellow + `🛑 FFmpeg exited (code=${code}, signal=${signal})` + reset);
-    }
-    ffmpegProcess = null;
-    recordingUser = null;
+    console.log(cyan + `🕐 FFmpeg exited for ${username}. Checking output file...\n` + reset);
+    
+    // Give filesystem a moment to sync
+    setTimeout(() => {
+      const fileExists = fs.existsSync(outputFile);
+      const resolvedExists = fs.existsSync(resolvedOutputFile);
+      let fileSize = 0;
+      if (fileExists) {
+        fileSize = fs.statSync(outputFile).size;
+      } else if (resolvedExists) {
+        fileSize = fs.statSync(resolvedOutputFile).size;
+      }
+      
+      console.log(cyan + '📊 Output file status:' + reset);
+      console.log(cyan + '  Path (relative): ' + outputFile + reset);
+      console.log(cyan + '  Path (resolved): ' + resolvedOutputFile + reset);
+      console.log(cyan + '  Exists (relative): ' + fileExists + reset);
+      console.log(cyan + '  Exists (resolved): ' + resolvedExists + reset);
+      console.log(cyan + '  Size: ' + fileSize + ' bytes\n' + reset);
+      
+      // List all files in recordings folder
+      try {
+        const files = fs.readdirSync('recordings');
+        console.log(cyan + '📁 Files in recordings/: ' + (files.length > 0 ? files.join(', ') : '(empty)') + reset);
+      } catch (err) {
+        console.log(red + '❌ Error reading recordings folder: ' + err.message + reset);
+      }
+
+      const currentState = getRecordingState(username);
+      const requestedRestart = currentState ? currentState.pendingRestart : false;
+      const wasIntentionalStop = currentState ? currentState.intentionalStop : false;
+      activeRecordings.delete(username);
+
+      if (code === 0) {
+        console.log(green + `✅ Recording completed successfully for ${username}` + reset);
+      } else {
+        console.log(yellow + `🛑 FFmpeg exited (code=${code}, signal=${signal})` + reset);
+        if (requestedRestart) {
+          console.log(yellow + `🔁 Restart requested for ${username}. Fetching a fresh stream URL...` + reset);
+          scheduleRestart(username);
+        } else if (!wasIntentionalStop) {
+          console.log(yellow + '🔁 Recording stopped unexpectedly. Scheduling retry for', username + reset);
+          scheduleRestart(username);
+        }
+      }
+
+      if (shutdownRequested && activeRecordings.size === 0) {
+        console.log(cyan + '👋 Recorder shutdown complete.' + reset);
+        process.exit(shutdownExitCode);
+      }
+    }, 1000);
   });
 
   ffmpegProcess.on('error', (err) => {
     console.error(red + '❌ FFmpeg process error:', err.message + reset);
-    ffmpegProcess = null;
-    recordingUser = null;
+    activeRecordings.delete(username);
   });
 
   ffmpegProcess.stderr.on('data', (data) => {
     const text = data.toString().trim();
-    if (text) {
-      // Filter out verbose ffmpeg stats
-      if (text.includes('frame=') || text.includes('time=') || text.includes('bitrate=')) {
-        // Silently log progress
-        process.stdout.write('.');
-      } else if (text.toLowerCase().includes('error')) {
-        console.log(red + '[ffmpeg] ERROR: ' + text + reset);
-      } else if (text.toLowerCase().includes('warning')) {
-        console.log(yellow + '[ffmpeg] WARNING: ' + text + reset);
-      } else {
-        console.log(blue + '[ffmpeg] ' + text + reset);
+    if (!text) {
+      return;
+    }
+
+    if (text.includes('frame=') || text.includes('time=') || text.includes('bitrate=')) {
+      process.stdout.write('.');
+      return;
+    }
+
+    const isHlsFailure = /404 Not Found/i.test(text) || /Failed to open segment/i.test(text) || /Media sequence changed unexpectedly/i.test(text);
+    if (isHlsFailure) {
+      const currentState = getRecordingState(username);
+      if (!currentState) {
+        return;
       }
+
+      const now = Date.now();
+      if (!currentState.errorState.firstFailureAt || now - currentState.errorState.firstFailureAt > 20000) {
+        currentState.errorState.firstFailureAt = now;
+        currentState.errorState.consecutiveHlsFailures = 0;
+      }
+      currentState.errorState.consecutiveHlsFailures += 1;
+
+      if (currentState.errorState.consecutiveHlsFailures >= 50) {
+        console.log(yellow + `⚠️ Detected repeated HLS segment failures for ${username} (${currentState.errorState.consecutiveHlsFailures}). Restarting recording...` + reset);
+        currentState.errorState.consecutiveHlsFailures = 0;
+        currentState.errorState.firstFailureAt = null;
+        stopRecording({ restart: true, username });
+      }
+    }
+
+    const isReconnectNotice = /Will reconnect/i.test(text) || /End of file/i.test(text) || /keepalive request failed/i.test(text);
+    if (isReconnectNotice) {
+      console.log(blue + '[ffmpeg] INFO: ' + text + reset);
+      return;
+    }
+
+    if (/Invalid data found|not find a matching/i.test(text)) {
+      console.log(yellow + '[ffmpeg] WARN: ' + text + reset);
+      return;
+    }
+
+    if (text.toLowerCase().includes('error')) {
+      console.log(red + '[ffmpeg] ERROR: ' + text + reset);
+    } else if (text.toLowerCase().includes('warning')) {
+      console.log(yellow + '[ffmpeg] WARNING: ' + text + reset);
+    } else {
+      console.log(blue + '[ffmpeg] ' + text + reset);
     }
   });
 
-  recordingUser = username;
+  ffmpegProcess.stdout.on('data', (data) => {
+    const text = data.toString().trim();
+    if (text && !text.includes('frame=')) {
+      console.log(blue + '[ffmpeg-stdout] ' + text + reset);
+    }
+  });
 }
 
-function stopRecording() {
-  if (!ffmpegProcess) {
+function stopRecording(options = {}) {
+  const targetUser = options.username;
+  const usernamesToStop = targetUser ? [targetUser] : Array.from(activeRecordings.keys());
+
+  if (usernamesToStop.length === 0) {
+    if (shutdownRequested && activeRecordings.size === 0) {
+      process.exit(shutdownExitCode);
+    }
     return;
   }
 
-  console.log(yellow + '🛑 Stopping recording gracefully...' + reset);
-  ffmpegProcess.stdin.write('q\n');
+  for (const username of usernamesToStop) {
+    const state = getRecordingState(username);
+    if (!state) {
+      continue;
+    }
+
+    state.intentionalStop = !options.restart;
+    state.pendingRestart = Boolean(options.restart);
+    console.log(yellow + `🛑 Stopping recording gracefully for ${username}...` + reset);
+    if (state.ffmpegProcess.stdin && !state.ffmpegProcess.stdin.destroyed) {
+      state.ffmpegProcess.stdin.write('q\n');
+    } else if (!state.ffmpegProcess.killed) {
+      state.ffmpegProcess.kill('SIGTERM');
+    }
+    state.errorState.consecutiveHlsFailures = 0;
+    state.errorState.firstFailureAt = null;
+  }
+}
+
+function requestShutdown(exitCode = 0, reason = 'Exiting gracefully...') {
+  if (shutdownRequested) {
+    return;
+  }
+
+  shutdownRequested = true;
+  shutdownExitCode = exitCode;
+  console.log(yellow + `✋ ${reason}` + reset);
+
+  if (activeRecordings.size === 0) {
+    process.exit(exitCode);
+    return;
+  }
+
+  stopRecording();
+  setTimeout(() => {
+    if (activeRecordings.size > 0) {
+      console.log(yellow + '⌛ FFmpeg did not exit in time. Forcing shutdown.' + reset);
+      process.exit(exitCode);
+    }
+  }, 10000);
+}
+
+function scheduleRestart(username) {
+  if (restartTimers.has(username) || isRecording(username) || shutdownRequested) {
+    return;
+  }
+
+  const restartTimer = setTimeout(async () => {
+    restartTimers.delete(username);
+    if (!isRecording(username) && !shutdownRequested) {
+      console.log(yellow + `🔁 Retrying recording for ${username} after FFmpeg stopped unexpectedly...` + reset);
+      const streamUrl = await getHlsStreamUrl(username);
+      if (streamUrl) {
+        startRecording(username, streamUrl);
+      } else {
+        console.log(yellow + `⚠️ Stream unavailable for ${username} when retrying. Monitor loop will try again later.` + reset);
+      }
+    }
+  }, 5000);
+  restartTimers.set(username, restartTimer);
 }
 
 function wait(ms) {
@@ -254,8 +435,9 @@ async function getHlsStreamUrl(username) {
         // Try to find stream URLs in the JSON
         const streamUrl = findStreamUrlInJson(sigiState);
         if (streamUrl) {
+          const decodedUrl = decodeEscapes(streamUrl);
           console.log(green + '🎥 Found stream URL in JSON for', uniqueId + reset);
-          return streamUrl;
+          return decodedUrl;
         }
 
         // Fallback: look for stream URLs in HTML
@@ -270,7 +452,7 @@ async function getHlsStreamUrl(username) {
             const url = matches[0];
             if (!url.includes('only_audio=1')) {
               console.log(green + '🎥 Found stream URL in HTML for', uniqueId + reset);
-              return url;
+              return decodeEscapes(url);
             }
           }
         }
@@ -337,28 +519,20 @@ function findStreamUrlInJson(node, visited = new Set()) {
 
 async function monitorLoop() {
   while (true) {
-    if (recordingUser) {
-      console.log(cyan + '⏸️ Recording in progress for', recordingUser, ', skipping live check' + reset);
-      await wait(checkIntervalMs);
-      continue;
-    }
-
     for (const username of usernames) {
       try {
         const streamUrl = await getHlsStreamUrl(username);
 
         if (streamUrl) {
-          if (!ffmpegProcess) {
+          if (!isRecording(username)) {
             startRecording(username, streamUrl);
-          } else if (recordingUser === username) {
-            console.log(green + '✅ Already recording', username + reset);
           } else {
-            console.log(yellow + '🔁 Another user is currently recording:', recordingUser + reset);
+            console.log(green + '✅ Already recording', username + reset);
           }
         } else {
-          if (ffmpegProcess && recordingUser === username) {
+          if (isRecording(username)) {
             console.log(red + '⚠️ Live ended or stream not found for', username + reset);
-            stopRecording();
+            stopRecording({ username });
           } else {
             console.log(blue + '⏳ Not live:', username + reset);
           }
@@ -373,12 +547,38 @@ async function monitorLoop() {
 }
 
 process.on('SIGINT', () => {
-  console.log(yellow + '✋ Exiting gracefully...' + reset);
-  stopRecording();
-  process.exit(0);
+  requestShutdown(0, 'Exiting gracefully...');
 });
 
-monitorLoop().catch((err) => {
-  console.error(red + 'Fatal error:', err + reset);
-  process.exit(1);
+process.on('SIGTERM', () => {
+  requestShutdown(0, 'Received SIGTERM, exiting gracefully...');
 });
+
+process.on('uncaughtException', (err) => {
+  console.error(red + '❌ Uncaught exception:', err.stack || err + reset);
+  if (activeRecordings.size > 0) {
+    stopRecording();
+  }
+  console.log(yellow + '🔁 Restarting monitor loop after uncaught exception...' + reset);
+  runMonitorLoop();
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error(red + '❌ Unhandled rejection:', reason, reset);
+  if (activeRecordings.size > 0) {
+    stopRecording();
+  }
+  console.log(yellow + '🔁 Restarting monitor loop after unhandled rejection...' + reset);
+  runMonitorLoop();
+});
+
+function runMonitorLoop() {
+  monitorLoop().catch(async (err) => {
+    console.error(red + 'Fatal monitor loop error:', err.stack || err + reset);
+    await wait(5000);
+    console.log(yellow + '🔁 Restarting monitor loop...' + reset);
+    runMonitorLoop();
+  });
+}
+
+runMonitorLoop();
