@@ -13,7 +13,6 @@ const blue = '\x1b[34m';
 const cyan = '\x1b[36m';
 const reset = '\x1b[0m';
 
-// 25 account placeholders - Add your TikTok usernames here
 const accountsList = [
   '', '', '', '', '',
   '', '', '', '', '',
