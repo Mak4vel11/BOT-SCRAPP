@@ -15,8 +15,8 @@ const reset = '\x1b[0m';
 
 // 25 account placeholders - Add your TikTok usernames here
 const accountsList = [
-  'kozak696990', 'cashmoneyotr', 'mosiadoda', 'viktorivanyuta', 'viktorrabey',
-  'etawanesiaofficial', 'qqpp__22', '', '', '',
+  'kozak696990', 'cashmoneyotr', 'ols_nazari', 'fire.fire9', 'kozak.megalluks69',
+  'babaimnp0', 'edlirhalilaj', 'medii_iiseni', '', '',
   '', '', '', '', '',
   '', '', '', '', '',
   '', '', '', '', ''
@@ -26,11 +26,20 @@ const rawUsernames = process.env.TIKTOK_USERNAME || process.env.TIKTOK_USERNAMES
 const usernames = rawUsernames.split(/[\s,]+/).map((u) => u.trim()).filter(Boolean);
 console.log(cyan + 'ℹ️ Configured usernames (' + usernames.length + '/25):', usernames.join(', ') || '(none configured yet)' + reset);
 const checkIntervalMs = parseInt(process.env.CHECK_INTERVAL_MS, 10) || 40 * 1000;
+const offlineConfirmationChecks = Math.max(1, parseInt(process.env.OFFLINE_CONFIRMATION_CHECKS || '3', 10) || 3);
 const rawRecordDuration = process.env.RECORD_DURATION;
 console.log(cyan + '🧮 Raw record duration value:', rawRecordDuration == null ? '(none)' : rawRecordDuration + reset);
 const recordDurationSeconds = rawRecordDuration != null && rawRecordDuration !== '' ? parseDuration(rawRecordDuration, 10) : null;
 const recordDurationLabel = recordDurationSeconds == null ? 'unlimited' : formatDuration(recordDurationSeconds);
 console.log(cyan + 'ℹ️ Record duration:', recordDurationLabel + reset);
+console.log(cyan + 'ℹ️ Offline confirmation checks: ' + offlineConfirmationChecks + reset);
+const uploadEnabled = /^(1|true|yes|on)$/i.test(String(process.env.UPLOAD_ENABLED || ''));
+const uploadHost = (process.env.UPLOAD_HOST || '').trim();
+const uploadPort = parseInt(process.env.UPLOAD_PORT || '22', 10) || 22;
+const uploadUser = (process.env.UPLOAD_USER || '').trim();
+const uploadRemotePath = (process.env.UPLOAD_REMOTE_PATH || '').trim();
+const uploadPrivateKeyPath = (process.env.UPLOAD_PRIVATE_KEY_PATH || '').trim();
+const uploadDeleteAfterSuccess = /^(1|true|yes|on)$/i.test(String(process.env.UPLOAD_DELETE_AFTER_SUCCESS || ''));
 
 function canRunFfmpeg(candidatePath) {
   if (!candidatePath) {
@@ -112,9 +121,68 @@ if (ffmpegVersionLine) {
 }
 
 const activeRecordings = new Map();
+const activeTransfers = new Map();
 const restartTimers = new Map();
+const liveCheckState = new Map();
 let shutdownRequested = false;
 let shutdownExitCode = 0;
+
+function canRunCommand(command, args = ['--help']) {
+  try {
+    const result = spawnSync(command, args, {
+      encoding: 'utf8',
+      timeout: 5000,
+      windowsHide: true
+    });
+
+    return !result.error;
+  } catch (err) {
+    return false;
+  }
+}
+
+function getUploadConfig() {
+  const missingFields = [];
+
+  if (!uploadHost) missingFields.push('UPLOAD_HOST');
+  if (!uploadUser) missingFields.push('UPLOAD_USER');
+  if (!uploadRemotePath) missingFields.push('UPLOAD_REMOTE_PATH');
+
+  if (missingFields.length > 0) {
+    return {
+      enabled: false,
+      reason: `missing required env vars: ${missingFields.join(', ')}`
+    };
+  }
+
+  if (!canRunCommand('scp')) {
+    return {
+      enabled: false,
+      reason: 'scp is not installed or not available in PATH'
+    };
+  }
+
+  return {
+    enabled: true,
+    host: uploadHost,
+    port: uploadPort,
+    user: uploadUser,
+    remotePath: uploadRemotePath,
+    privateKeyPath: uploadPrivateKeyPath || null,
+    deleteAfterSuccess: uploadDeleteAfterSuccess
+  };
+}
+
+const uploadConfig = getUploadConfig();
+if (uploadEnabled) {
+  if (uploadConfig.enabled) {
+    console.log(cyan + `📤 Upload target enabled: ${uploadConfig.user}@${uploadConfig.host}:${uploadConfig.remotePath}` + reset);
+  } else {
+    console.log(yellow + `⚠️ Upload requested but disabled: ${uploadConfig.reason}` + reset);
+  }
+} else {
+  console.log(cyan + '📤 Upload target: disabled' + reset);
+}
 
 function getRecordingState(username) {
   return activeRecordings.get(username) || null;
@@ -122,6 +190,114 @@ function getRecordingState(username) {
 
 function isRecording(username) {
   return activeRecordings.has(username);
+}
+
+function getLiveCheckState(username) {
+  if (!liveCheckState.has(username)) {
+    liveCheckState.set(username, { consecutiveOfflineChecks: 0 });
+  }
+
+  return liveCheckState.get(username);
+}
+
+function resetOfflineChecks(username) {
+  getLiveCheckState(username).consecutiveOfflineChecks = 0;
+}
+
+function noteOfflineCheck(username) {
+  const state = getLiveCheckState(username);
+  state.consecutiveOfflineChecks += 1;
+  return state.consecutiveOfflineChecks;
+}
+
+function hasActiveTransfers() {
+  return activeTransfers.size > 0;
+}
+
+function maybeExitAfterShutdown() {
+  if (shutdownRequested && activeRecordings.size === 0 && !hasActiveTransfers()) {
+    console.log(cyan + '👋 Recorder shutdown complete.' + reset);
+    process.exit(shutdownExitCode);
+  }
+}
+
+function queueUpload(username, outputFile) {
+  if (!uploadEnabled) {
+    return;
+  }
+
+  if (!uploadConfig.enabled) {
+    console.log(yellow + `⚠️ Skipping upload for ${username}: ${uploadConfig.reason}` + reset);
+    return;
+  }
+
+  const resolvedOutputFile = path.resolve(outputFile);
+  if (!fs.existsSync(resolvedOutputFile)) {
+    console.log(yellow + `⚠️ Skipping upload for ${username}: file not found at ${resolvedOutputFile}` + reset);
+    return;
+  }
+
+  const transferId = `${username}:${Date.now()}:${path.basename(resolvedOutputFile)}`;
+  const remoteTarget = `${uploadConfig.user}@${uploadConfig.host}:${uploadConfig.remotePath.replace(/\\/g, '/')}/`;
+  const scpArgs = ['-P', String(uploadConfig.port)];
+
+  if (uploadConfig.privateKeyPath) {
+    scpArgs.push('-i', uploadConfig.privateKeyPath);
+  }
+
+  scpArgs.push(resolvedOutputFile, remoteTarget);
+
+  console.log(cyan + `📤 Uploading ${path.basename(resolvedOutputFile)} for ${username} to ${remoteTarget}` + reset);
+  const uploadProcess = spawn('scp', scpArgs, {
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+
+  activeTransfers.set(transferId, {
+    username,
+    file: resolvedOutputFile,
+    process: uploadProcess
+  });
+
+  uploadProcess.stdout.on('data', (data) => {
+    const text = data.toString().trim();
+    if (text) {
+      console.log(blue + `[upload] ${text}` + reset);
+    }
+  });
+
+  uploadProcess.stderr.on('data', (data) => {
+    const text = data.toString().trim();
+    if (text) {
+      console.log(yellow + `[upload] ${text}` + reset);
+    }
+  });
+
+  uploadProcess.on('error', (err) => {
+    activeTransfers.delete(transferId);
+    console.log(red + `❌ Upload process error for ${username}: ${err.message}` + reset);
+    maybeExitAfterShutdown();
+  });
+
+  uploadProcess.on('exit', (code) => {
+    activeTransfers.delete(transferId);
+
+    if (code === 0) {
+      console.log(green + `✅ Upload completed for ${username}: ${resolvedOutputFile}` + reset);
+
+      if (uploadConfig.deleteAfterSuccess) {
+        try {
+          fs.unlinkSync(resolvedOutputFile);
+          console.log(cyan + `🧹 Deleted local file after upload: ${resolvedOutputFile}` + reset);
+        } catch (err) {
+          console.log(yellow + `⚠️ Uploaded but failed to delete local file ${resolvedOutputFile}: ${err.message}` + reset);
+        }
+      }
+    } else {
+      console.log(red + `❌ Upload failed for ${username} with exit code ${code}: ${resolvedOutputFile}` + reset);
+    }
+
+    maybeExitAfterShutdown();
+  });
 }
 
 function getOutputConfig(streamUrl, username) {
@@ -226,6 +402,11 @@ function startRecording(username, streamUrl) {
 
       if (code === 0) {
         console.log(green + `✅ Recording completed successfully for ${username}` + reset);
+        if (fileSize > 0) {
+          queueUpload(username, resolvedOutputFile);
+        } else {
+          console.log(yellow + `⚠️ Skipping upload for ${username}: output file is empty` + reset);
+        }
       } else {
         console.log(yellow + `🛑 FFmpeg exited (code=${code}, signal=${signal})` + reset);
         if (requestedRestart) {
@@ -237,10 +418,7 @@ function startRecording(username, streamUrl) {
         }
       }
 
-      if (shutdownRequested && activeRecordings.size === 0) {
-        console.log(cyan + '👋 Recorder shutdown complete.' + reset);
-        process.exit(shutdownExitCode);
-      }
+      maybeExitAfterShutdown();
     }, 1000);
   });
 
@@ -322,9 +500,7 @@ function stopRecording(options = {}) {
   const usernamesToStop = targetUser ? [targetUser] : Array.from(activeRecordings.keys());
 
   if (usernamesToStop.length === 0) {
-    if (shutdownRequested && activeRecordings.size === 0) {
-      process.exit(shutdownExitCode);
-    }
+    maybeExitAfterShutdown();
     return;
   }
 
@@ -357,7 +533,7 @@ function requestShutdown(exitCode = 0, reason = 'Exiting gracefully...') {
   console.log(yellow + `✋ ${reason}` + reset);
 
   if (activeRecordings.size === 0) {
-    process.exit(exitCode);
+    maybeExitAfterShutdown();
     return;
   }
 
@@ -618,6 +794,7 @@ async function monitorLoop() {
         const streamUrl = await getHlsStreamUrl(username);
 
         if (streamUrl) {
+          resetOfflineChecks(username);
           if (!isRecording(username)) {
             startRecording(username, streamUrl);
           } else {
@@ -625,9 +802,16 @@ async function monitorLoop() {
           }
         } else {
           if (isRecording(username)) {
-            console.log(red + '⚠️ Live ended or stream not found for', username + reset);
-            stopRecording({ username });
+            const offlineChecks = noteOfflineCheck(username);
+            if (offlineChecks >= offlineConfirmationChecks) {
+              console.log(red + `⚠️ Live confirmed ended for ${username} after ${offlineChecks} offline checks.` + reset);
+              stopRecording({ username });
+              resetOfflineChecks(username);
+            } else {
+              console.log(yellow + `⚠️ Stream check missed for ${username} (${offlineChecks}/${offlineConfirmationChecks}). Keeping current recording running.` + reset);
+            }
           } else {
+            resetOfflineChecks(username);
             console.log(blue + '⏳ Not live:', username + reset);
           }
         }
