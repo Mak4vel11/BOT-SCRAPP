@@ -15,8 +15,8 @@ const reset = '\x1b[0m';
 
 // 25 account placeholders - Add your TikTok usernames here
 const accountsList = [
-  'kozak696990', 'cashmoneyotr', 'ols_nazari', 'fire.fire9', 'kozak.megalluks69',
-  'babaimnp0', 'edlirhalilaj', 'medii_iiseni', '', '',
+  '', '', '', '', '',
+  '', '', '', '', '',
   '', '', '', '', '',
   '', '', '', '', '',
   '', '', '', '', ''
