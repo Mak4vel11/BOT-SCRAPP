@@ -1,3 +1,6 @@
 node_modules
 .env
 distrecordings/
+tiktok_cookies.txt
+cookies.txt
+*.cookies.txt

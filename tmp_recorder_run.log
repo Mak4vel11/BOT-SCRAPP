@@ -1,0 +1,115 @@
+[36mℹ️ Configured usernames (8/25): haverri_sp, kozak696990, itskingmafia, cashmoneyotr, diamanti_bluofficial, followlungo, greca99, fjollamorinazyrtare
+[36m🧮 Raw record duration value: (none)
+[36mℹ️ Record duration: unlimited[0m
+[36mℹ️ Offline confirmation checks: 3[0m
+[36mℹ️ Restart on stream URL change: disabled[0m
+[36mℹ️ Restart on better quality: disabled[0m
+[36mℹ️ Stream format preference: flv[0m
+[36m📄 Working directory: C:\Users\dell\Desktop\BOT-SCRAPP[0m
+[36m📁 Recordings folder: C:\Users\dell\Desktop\BOT-SCRAPP\recordings[0m
+[36m🎞️ Using FFmpeg binary: C:\Users\dell\Desktop\BOT-SCRAPP\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe[0m
+[36m🎞️ FFmpeg probe: ffmpeg version N-92722-gf22fcd4483 Copyright (c) 2000-2018 the FFmpeg developers[0m
+[36m📤 Upload target: disabled[0m
+[36m🔎 Checking live status for haverri_sp[0m
+[34m⏳ Not live (status: 4 ): haverri_sp[0m
+[34m⏳ Not live: haverri_sp[0m
+[36m🔎 Checking live status for kozak696990[0m
+[32m✅ User is live: kozak696990[0m
+[33m⚠️ User is live but no stream URL found for kozak696990[0m
+[34m⏳ Not live: kozak696990[0m
+[36m🔎 Checking live status for itskingmafia[0m
+[34m⏳ Not live (status: 4 ): itskingmafia[0m
+[34m⏳ Not live: itskingmafia[0m
+[36m🔎 Checking live status for cashmoneyotr[0m
+[34m⏳ Not live (status: 4 ): cashmoneyotr[0m
+[34m⏳ Not live: cashmoneyotr[0m
+[36m🔎 Checking live status for diamanti_bluofficial[0m
+[34m⏳ Not live (status: 4 ): diamanti_bluofficial[0m
+[34m⏳ Not live: diamanti_bluofficial[0m
+[36m🔎 Checking live status for followlungo[0m
+[32m✅ User is live: followlungo[0m
+[32m🎥 Found stream URL in JSON for followlungo (flv/or4)[0m
+[32m🎥 Starting recording for followlungo -> recordings\live_followlungo_1777152651458.mkv[0m
+[32m⏱️ Record duration: unlimited[0m
+[34m🔗 Stream URL: https://pull-flv-f77-tt04.tiktokcdn-us.com/stage/stream-1272184174740768065_or4.flv?expire=1778362250&sign=bbade2443c369874e315990713f9e1f6[0m
+[36m🔧 FFmpeg command: C:\Users\dell\Desktop\BOT-SCRAPP\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe "-y" "-hide_banner" "-loglevel" "warning" "-fflags" "+discardcorrupt" "-reconnect" "1" "-reconnect_streamed" "1" "-reconnect_delay_max" "5" "-rw_timeout" "15000000" "-rtbufsize" "100M" "-user_agent" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36" "-headers" "Accept: */*
+Accept-Language: en-US,en;q=0.9
+Origin: https://www.tiktok.com
+Referer: https://www.tiktok.com/@followlungo/live
+" "-i" "https://pull-flv-f77-tt04.tiktokcdn-us.com/stage/stream-1272184174740768065_or4.flv?expire=1778362250&sign=bbade2443c369874e315990713f9e1f6" "-c" "copy" "-bsf:v" "h264_mp4toannexb" "-f" "matroska" "recordings\live_followlungo_1777152651458.mkv"[0m
+[36m🏃 Spawning FFmpeg process...[0m
+[36m✅ FFmpeg process spawned for followlungo (PID: 14804)[0m
+[36m🔎 Checking live status for greca99[0m
+[32m✅ User is live: greca99[0m
+[32m🎥 Found stream URL in JSON for greca99 (flv/or4)[0m
+[32m🎥 Starting recording for greca99 -> recordings\live_greca99_1777152652018.mkv[0m
+[32m⏱️ Record duration: unlimited[0m
+[34m🔗 Stream URL: https://pull-flv-f77-tt04.tiktokcdn-us.com/stage/stream-4442717838288618365_or4.flv?expire=1778362251&sign=aba1883c45b909c232336520b32cb068[0m
+[36m🔧 FFmpeg command: C:\Users\dell\Desktop\BOT-SCRAPP\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe "-y" "-hide_banner" "-loglevel" "warning" "-fflags" "+discardcorrupt" "-reconnect" "1" "-reconnect_streamed" "1" "-reconnect_delay_max" "5" "-rw_timeout" "15000000" "-rtbufsize" "100M" "-user_agent" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36" "-headers" "Accept: */*
+Accept-Language: en-US,en;q=0.9
+Origin: https://www.tiktok.com
+Referer: https://www.tiktok.com/@greca99/live
+" "-i" "https://pull-flv-f77-tt04.tiktokcdn-us.com/stage/stream-4442717838288618365_or4.flv?expire=1778362251&sign=aba1883c45b909c232336520b32cb068" "-c" "copy" "-bsf:v" "h264_mp4toannexb" "-f" "matroska" "recordings\live_greca99_1777152652018.mkv"[0m
+[36m🏃 Spawning FFmpeg process...[0m
+[36m✅ FFmpeg process spawned for greca99 (PID: 4968)[0m
+[36m🔎 Checking live status for fjollamorinazyrtare[0m
+[32m✅ User is live: fjollamorinazyrtare[0m
+[33m⚠️ User is live but no stream URL found for fjollamorinazyrtare[0m
+[34m⏳ Not live: fjollamorinazyrtare[0m
+[31m[ffmpeg] ERROR: [https @ 00000225c772e300] HTTP error 503 Service Unavailable[0m
+[31m[ffmpeg] ERROR: https://pull-flv-f77-tt04.tiktokcdn-us.com/stage/stream-4442717838288618365_or4.flv?expire=1778362251&sign=aba1883c45b909c232336520b32cb068: Server returned 5XX Server Error reply[0m
+[36m🕐 FFmpeg exited for greca99. Checking output file...
+[0m
+[36m📊 Output file status:[0m
+[36m  Path (relative): recordings\live_greca99_1777152652018.mkv[0m
+[36m  Path (resolved): C:\Users\dell\Desktop\BOT-SCRAPP\recordings\live_greca99_1777152652018.mkv[0m
+[36m  Exists (relative): false[0m
+[36m  Exists (resolved): false[0m
+[36m  Size: 0 bytes
+[0m
+[36m📁 Files in recordings/: live_fjollamorinazyrtare_1777152272059.mkv, live_fjollamorinazyrtare_1777152272140.mkv, live_followlungo_1777152325914.mkv, live_followlungo_1777152328274.mkv, live_followlungo_1777152434598.mkv, live_followlungo_1777152651458.mkv, live_greca99_1777146804049.mkv, live_greca99_1777152064677.mkv, live_greca99_1777152223432.mkv, live_greca99_1777152435657.mkv, live_kozak696990_1777150917869.mkv, live_kozak696990_1777150962465.mkv, live_kozak696990_1777152378343.mkv, live_kozak696990_1777152427696.mkv[0m
+[33m🛑 FFmpeg exited (code=1, signal=null)[0m
+[33m⏳ Empty/failed start count for greca99: 1. Next retry delay: 5s.[0m
+[33m🔁 Recording stopped unexpectedly. Scheduling retry for greca99[0m
+[33m🔁 Retrying recording for greca99 after FFmpeg stopped unexpectedly...[0m
+[36m🔎 Checking live status for greca99[0m
+[32m✅ User is live: greca99[0m
+[32m🎥 Found stream URL in JSON for greca99 (flv/or4)[0m
+[32m🎥 Starting recording for greca99 -> recordings\live_greca99_1777152666804.mkv[0m
+[32m⏱️ Record duration: unlimited[0m
+[34m🔗 Stream URL: https://pull-flv-f77-tt04.tiktokcdn-us.com/stage/stream-4442717838288618365_or4.flv?expire=1778362265&sign=94f1f91fc6804e5a13b1277a002e9500[0m
+[36m🔧 FFmpeg command: C:\Users\dell\Desktop\BOT-SCRAPP\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe "-y" "-hide_banner" "-loglevel" "warning" "-fflags" "+discardcorrupt" "-reconnect" "1" "-reconnect_streamed" "1" "-reconnect_delay_max" "5" "-rw_timeout" "15000000" "-rtbufsize" "100M" "-user_agent" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36" "-headers" "Accept: */*
+Accept-Language: en-US,en;q=0.9
+Origin: https://www.tiktok.com
+Referer: https://www.tiktok.com/@greca99/live
+" "-i" "https://pull-flv-f77-tt04.tiktokcdn-us.com/stage/stream-4442717838288618365_or4.flv?expire=1778362265&sign=94f1f91fc6804e5a13b1277a002e9500" "-c" "copy" "-bsf:v" "h264_mp4toannexb" "-f" "matroska" "recordings\live_greca99_1777152666804.mkv"[0m
+[36m🏃 Spawning FFmpeg process...[0m
+[36m✅ FFmpeg process spawned for greca99 (PID: 9660)[0m
+[36m🔎 Checking live status for haverri_sp[0m
+[34m⏳ Not live (status: 4 ): haverri_sp[0m
+[34m⏳ Not live: haverri_sp[0m
+[36m🔎 Checking live status for kozak696990[0m
+[32m✅ User is live: kozak696990[0m
+[33m⚠️ User is live but no stream URL found for kozak696990[0m
+[34m⏳ Not live: kozak696990[0m
+[36m🔎 Checking live status for itskingmafia[0m
+[34m⏳ Not live (status: 4 ): itskingmafia[0m
+[34m⏳ Not live: itskingmafia[0m
+[36m🔎 Checking live status for cashmoneyotr[0m
+[34m⏳ Not live (status: 4 ): cashmoneyotr[0m
+[34m⏳ Not live: cashmoneyotr[0m
+[36m🔎 Checking live status for diamanti_bluofficial[0m
+[34m⏳ Not live (status: 4 ): diamanti_bluofficial[0m
+[34m⏳ Not live: diamanti_bluofficial[0m
+[36m🔎 Checking live status for followlungo[0m
+[32m✅ User is live: followlungo[0m
+[32m🎥 Found stream URL in JSON for followlungo (flv/or4)[0m
+[32m✅ Already recording followlungo[0m
+[36m🔎 Checking live status for greca99[0m
+[32m✅ User is live: greca99[0m
+[32m🎥 Found stream URL in JSON for greca99 (flv/or4)[0m
+[32m✅ Already recording greca99[0m
+[36m🔎 Checking live status for fjollamorinazyrtare[0m
+[32m✅ User is live: fjollamorinazyrtare[0m
+[33m⚠️ User is live but no stream URL found for fjollamorinazyrtare[0m
+[34m⏳ Not live: fjollamorinazyrtare[0m
